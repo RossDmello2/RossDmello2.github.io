@@ -1,0 +1,69 @@
+name: Publish Email Automation App
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/deploy-email-automation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: publish-email-automation
+  cancel-in-progress: true
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+    env:
+      VITE_API_URL: https://finimatic-backend.onrender.com
+    steps:
+      - name: Checkout Pages repo
+        uses: actions/checkout@v4
+        with:
+          path: pages
+          persist-credentials: true
+
+      - name: Checkout Finimatic app repo
+        uses: actions/checkout@v4
+        with:
+          repository: RossDmello2/email-automation
+          ref: main
+          path: app
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: app/frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: app/frontend
+
+      - name: Build frontend for GitHub Pages
+        run: npm run build -- --base=/email-automation/
+        working-directory: app/frontend
+
+      - name: Copy built frontend into Pages repo
+        run: |
+          rm -rf pages/email-automation
+          mkdir -p pages/email-automation
+          cp -R app/frontend/dist/. pages/email-automation/
+          touch pages/email-automation/.nojekyll
+
+      - name: Commit published frontend
+        run: |
+          cd pages
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add email-automation
+          if git diff --cached --quiet; then
+            echo "No frontend changes to publish."
+          else
+            git commit -m "Publish email automation frontend"
+            git push
+          fi
